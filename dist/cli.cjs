@@ -274,60 +274,72 @@ function detectHardcodedSecrets(cwd, sourceDirectories, ignoredDirectories = ["n
 }
 
 // src/cli/commands/audit.ts
+async function runAudit(cwd, configPath) {
+  const config = await loadConfig(cwd, configPath);
+  const envFilesList = scanEnvFiles(cwd);
+  const parsedEnv = loadEnvFiles(cwd, envFilesList);
+  const definedVariables = new Set(Object.keys(parsedEnv));
+  const sourceDirs = config.sourceDirectories || ["src", "app", "server"];
+  const ignoredDirs = config.ignoredDirectories || ["node_modules", "dist", "build"];
+  const usedVariables = scanSourceCode(cwd, sourceDirs, ignoredDirs);
+  const unusedVariables = findUnusedVariables(definedVariables, usedVariables);
+  const missingVariables = [];
+  for (const v of usedVariables) {
+    if (!definedVariables.has(v) && v !== "NODE_ENV") {
+      missingVariables.push(v);
+    }
+  }
+  const publicSecrets = detectPublicSecrets(definedVariables);
+  const weakSecrets = detectWeakSecrets(parsedEnv, config.security?.minimumSecretLength);
+  const hardcodedSecrets = detectHardcodedSecrets(cwd, sourceDirs, ignoredDirs);
+  const securityFindings = [...publicSecrets, ...weakSecrets, ...hardcodedSecrets];
+  const securityCriticals = securityFindings.filter((f) => f.severity === "CRITICAL").length;
+  const securityWarnings = securityFindings.filter((f) => f.severity === "WARNING").length;
+  const score = calculateHealthScore({
+    totalVariables: definedVariables.size,
+    validVariables: definedVariables.size,
+    unusedVariables: unusedVariables.length,
+    missingVariables: missingVariables.length,
+    securityWarnings,
+    securityCriticals
+  });
+  return {
+    score,
+    definedVariables,
+    envFilesList,
+    unusedVariables,
+    missingVariables,
+    securityFindings,
+    securityCriticals
+  };
+}
 async function auditCommand(options) {
   const cwd = process.cwd();
   try {
-    const config = await loadConfig(cwd, options.config);
-    const envFilesList = scanEnvFiles(cwd);
-    const parsedEnv = loadEnvFiles(cwd, envFilesList);
-    const definedVariables = new Set(Object.keys(parsedEnv));
-    const sourceDirs = config.sourceDirectories || ["src", "app", "server"];
-    const ignoredDirs = config.ignoredDirectories || ["node_modules", "dist", "build"];
-    const usedVariables = scanSourceCode(cwd, sourceDirs, ignoredDirs);
-    const unusedVariables = findUnusedVariables(definedVariables, usedVariables);
-    const missingVariables = [];
-    for (const v of usedVariables) {
-      if (!definedVariables.has(v) && v !== "NODE_ENV") {
-        missingVariables.push(v);
-      }
-    }
-    const publicSecrets = detectPublicSecrets(definedVariables);
-    const weakSecrets = detectWeakSecrets(parsedEnv, config.security?.minimumSecretLength);
-    const hardcodedSecrets = detectHardcodedSecrets(cwd, sourceDirs, ignoredDirs);
-    const securityFindings = [...publicSecrets, ...weakSecrets, ...hardcodedSecrets];
-    const securityCriticals = securityFindings.filter((f) => f.severity === "CRITICAL").length;
-    const securityWarnings = securityFindings.filter((f) => f.severity === "WARNING").length;
-    const score = calculateHealthScore({
-      totalVariables: definedVariables.size,
-      validVariables: definedVariables.size,
-      unusedVariables: unusedVariables.length,
-      missingVariables: missingVariables.length,
-      securityWarnings,
-      securityCriticals
-    });
+    const data = await runAudit(cwd, options.config);
     console.log(import_picocolors2.default.bold(`
 \u{1F6E1}\uFE0F Env Sentinel Audit
 `));
     console.log(`Environment Health:
-${import_picocolors2.default.bold(score >= 80 ? import_picocolors2.default.green(score) : score >= 60 ? import_picocolors2.default.yellow(score) : import_picocolors2.default.red(score))}/100
+${import_picocolors2.default.bold(data.score >= 80 ? import_picocolors2.default.green(data.score) : data.score >= 60 ? import_picocolors2.default.yellow(data.score) : import_picocolors2.default.red(data.score))}/100
 `);
     console.log(import_picocolors2.default.bold(`Configuration:`));
-    console.log(`\u2713 ${definedVariables.size} variables detected in ${envFilesList.length} files`);
-    if (unusedVariables.length > 0) {
-      console.log(import_picocolors2.default.yellow(`\u26A0 ${unusedVariables.length} variables appear unused:`));
-      unusedVariables.forEach((v) => console.log(import_picocolors2.default.dim(`  - ${v}`)));
+    console.log(`\u2713 ${data.definedVariables.size} variables detected in ${data.envFilesList.length} files`);
+    if (data.unusedVariables.length > 0) {
+      console.log(import_picocolors2.default.yellow(`\u26A0 ${data.unusedVariables.length} variables appear unused:`));
+      data.unusedVariables.forEach((v) => console.log(import_picocolors2.default.dim(`  - ${v}`)));
     } else {
       console.log(import_picocolors2.default.green(`\u2713 All detected variables are actively used`));
     }
-    if (missingVariables.length > 0) {
+    if (data.missingVariables.length > 0) {
       console.log(import_picocolors2.default.red(`
-\u2717 ${missingVariables.length} variables used in code but missing from environment:`));
-      missingVariables.forEach((v) => console.log(import_picocolors2.default.dim(`  - ${v}`)));
+\u2717 ${data.missingVariables.length} variables used in code but missing from environment:`));
+      data.missingVariables.forEach((v) => console.log(import_picocolors2.default.dim(`  - ${v}`)));
     }
-    if (securityFindings.length > 0) {
+    if (data.securityFindings.length > 0) {
       console.log(import_picocolors2.default.bold(`
 Security Findings:`));
-      securityFindings.forEach((f) => {
+      data.securityFindings.forEach((f) => {
         const color = f.severity === "CRITICAL" ? import_picocolors2.default.red : import_picocolors2.default.yellow;
         console.log(color(`[${f.severity}] ${f.message}`));
         if (f.file) console.log(import_picocolors2.default.dim(`  File: ${f.file}`));
@@ -337,8 +349,8 @@ Security Findings:`));
 \u2713 No security issues detected.`));
     }
     console.log("\n");
-    if (missingVariables.length > 0 || securityCriticals > 0) {
-      console.error(import_picocolors2.default.red(`\u2717 Audit failed: Found ${missingVariables.length} missing variables and ${securityCriticals} critical security issues.`));
+    if (data.missingVariables.length > 0 || data.securityCriticals > 0) {
+      console.error(import_picocolors2.default.red(`\u2717 Audit failed: Found ${data.missingVariables.length} missing variables and ${data.securityCriticals} critical security issues.`));
       process.exit(1);
     }
   } catch (err) {
