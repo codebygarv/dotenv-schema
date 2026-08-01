@@ -24,6 +24,7 @@ describe('Audit: Calculate Score', () => {
       unusedVariables: 0,
       missingVariables: 2,
       securityWarnings: 0,
+      securityCriticals: 0,
     });
     
     expect(score).toBe(90); // 100 - (2 * 5)

@@ -3,7 +3,8 @@ export function calculateHealthScore(options: {
   validVariables: number;
   unusedVariables: number;
   missingVariables: number;
-  securityWarnings: number; // Placeholder for Phase 4
+  securityWarnings: number;
+  securityCriticals: number;
 }): number {
   if (options.totalVariables === 0) return 100;
 
@@ -19,8 +20,9 @@ export function calculateHealthScore(options: {
   // Unused variables (Slight penalty)
   score -= (options.unusedVariables * 2);
 
-  // Security warnings (Placeholder penalty)
+  // Security warnings
   score -= (options.securityWarnings * 10);
+  score -= (options.securityCriticals * 25);
 
   return Math.max(0, Math.min(100, Math.floor(score)));
 }
