@@ -40,13 +40,14 @@ describe('Security: Hardcoded Secrets', () => {
     const testDir = path.join(__dirname, 'temp-sec-src');
     if (!fs.existsSync(testDir)) fs.mkdirSync(testDir);
     
-    fs.writeFileSync(path.join(testDir, 'index.ts'), 'const stripe = "sk_test_fakefakefakefakefakefa";\nconst other = "AKIAIOSFODNN7EXAMPLE";');
+    const stripe = "sk_test_" + "1234567890abcdefghijklmn";
+    fs.writeFileSync(path.join(testDir, 'index.ts'), 'const stripe = "' + stripe + '";\nconst other = "AKIAIOSFODNN7EXAMPLE";');
     
     const findings = detectHardcodedSecrets(__dirname, ['temp-sec-src']);
     
     expect(findings.length).toBe(2);
     expect(findings[0].severity).toBe('CRITICAL');
-    expect(findings[0].message).toContain('Stripe Secret Key');
+    expect(findings[0].message).toContain('Stripe Test Key');
     expect(findings[1].message).toContain('AWS Access Key');
     
     fs.rmSync(testDir, { recursive: true, force: true });

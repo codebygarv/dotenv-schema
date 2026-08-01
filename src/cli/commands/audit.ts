@@ -9,68 +9,81 @@ import { detectPublicSecrets } from '../../security/detect-public-secrets.js';
 import { detectWeakSecrets } from '../../security/detect-weak-secrets.js';
 import { detectHardcodedSecrets } from '../../security/detect-hardcoded.js';
 
+export async function runAudit(cwd: string, configPath?: string) {
+  const config = await loadConfig(cwd, configPath);
+  const envFilesList = scanEnvFiles(cwd);
+  const parsedEnv = loadEnvFiles(cwd, envFilesList);
+  
+  const definedVariables = new Set(Object.keys(parsedEnv));
+  const sourceDirs = config.sourceDirectories || ['src', 'app', 'server'];
+  const ignoredDirs = config.ignoredDirectories || ['node_modules', 'dist', 'build'];
+  
+  const usedVariables = scanSourceCode(cwd, sourceDirs, ignoredDirs);
+  
+  const unusedVariables = findUnusedVariables(definedVariables, usedVariables);
+  
+  const missingVariables: string[] = [];
+  for (const v of usedVariables) {
+    if (!definedVariables.has(v) && v !== 'NODE_ENV') {
+      missingVariables.push(v);
+    }
+  }
+
+  const publicSecrets = detectPublicSecrets(definedVariables);
+  const weakSecrets = detectWeakSecrets(parsedEnv, config.security?.minimumSecretLength);
+  const hardcodedSecrets = detectHardcodedSecrets(cwd, sourceDirs, ignoredDirs);
+  
+  const securityFindings = [...publicSecrets, ...weakSecrets, ...hardcodedSecrets];
+  const securityCriticals = securityFindings.filter(f => f.severity === 'CRITICAL').length;
+  const securityWarnings = securityFindings.filter(f => f.severity === 'WARNING').length;
+
+  const score = calculateHealthScore({
+    totalVariables: definedVariables.size,
+    validVariables: definedVariables.size, 
+    unusedVariables: unusedVariables.length,
+    missingVariables: missingVariables.length,
+    securityWarnings,
+    securityCriticals
+  });
+
+  return {
+    score,
+    definedVariables,
+    envFilesList,
+    unusedVariables,
+    missingVariables,
+    securityFindings,
+    securityCriticals
+  };
+}
+
 export async function auditCommand(options: { config?: string }) {
   const cwd = process.cwd();
   
   try {
-    const config = await loadConfig(cwd, options.config);
-    const envFilesList = scanEnvFiles(cwd);
-    const parsedEnv = loadEnvFiles(cwd, envFilesList);
-    
-    const definedVariables = new Set(Object.keys(parsedEnv));
-    const sourceDirs = config.sourceDirectories || ['src', 'app', 'server'];
-    const ignoredDirs = config.ignoredDirectories || ['node_modules', 'dist', 'build'];
-    
-    const usedVariables = scanSourceCode(cwd, sourceDirs, ignoredDirs);
-    
-    const unusedVariables = findUnusedVariables(definedVariables, usedVariables);
-    
-    const missingVariables: string[] = [];
-    for (const v of usedVariables) {
-      if (!definedVariables.has(v) && v !== 'NODE_ENV') {
-        missingVariables.push(v);
-      }
-    }
-
-    // Security Scans
-    const publicSecrets = detectPublicSecrets(definedVariables);
-    const weakSecrets = detectWeakSecrets(parsedEnv, config.security?.minimumSecretLength);
-    const hardcodedSecrets = detectHardcodedSecrets(cwd, sourceDirs, ignoredDirs);
-    
-    const securityFindings = [...publicSecrets, ...weakSecrets, ...hardcodedSecrets];
-    const securityCriticals = securityFindings.filter(f => f.severity === 'CRITICAL').length;
-    const securityWarnings = securityFindings.filter(f => f.severity === 'WARNING').length;
-
-    const score = calculateHealthScore({
-      totalVariables: definedVariables.size,
-      validVariables: definedVariables.size, 
-      unusedVariables: unusedVariables.length,
-      missingVariables: missingVariables.length,
-      securityWarnings,
-      securityCriticals
-    });
+    const data = await runAudit(cwd, options.config);
 
     console.log(pc.bold(`\n🛡️ Env Sentinel Audit\n`));
-    console.log(`Environment Health:\n${pc.bold(score >= 80 ? pc.green(score) : score >= 60 ? pc.yellow(score) : pc.red(score))}/100\n`);
+    console.log(`Environment Health:\n${pc.bold(data.score >= 80 ? pc.green(data.score) : data.score >= 60 ? pc.yellow(data.score) : pc.red(data.score))}/100\n`);
     
     console.log(pc.bold(`Configuration:`));
-    console.log(`✓ ${definedVariables.size} variables detected in ${envFilesList.length} files`);
+    console.log(`✓ ${data.definedVariables.size} variables detected in ${data.envFilesList.length} files`);
     
-    if (unusedVariables.length > 0) {
-      console.log(pc.yellow(`⚠ ${unusedVariables.length} variables appear unused:`));
-      unusedVariables.forEach(v => console.log(pc.dim(`  - ${v}`)));
+    if (data.unusedVariables.length > 0) {
+      console.log(pc.yellow(`⚠ ${data.unusedVariables.length} variables appear unused:`));
+      data.unusedVariables.forEach(v => console.log(pc.dim(`  - ${v}`)));
     } else {
       console.log(pc.green(`✓ All detected variables are actively used`));
     }
 
-    if (missingVariables.length > 0) {
-      console.log(pc.red(`\n✗ ${missingVariables.length} variables used in code but missing from environment:`));
-      missingVariables.forEach(v => console.log(pc.dim(`  - ${v}`)));
+    if (data.missingVariables.length > 0) {
+      console.log(pc.red(`\n✗ ${data.missingVariables.length} variables used in code but missing from environment:`));
+      data.missingVariables.forEach(v => console.log(pc.dim(`  - ${v}`)));
     }
 
-    if (securityFindings.length > 0) {
+    if (data.securityFindings.length > 0) {
       console.log(pc.bold(`\nSecurity Findings:`));
-      securityFindings.forEach(f => {
+      data.securityFindings.forEach(f => {
         const color = f.severity === 'CRITICAL' ? pc.red : pc.yellow;
         console.log(color(`[${f.severity}] ${f.message}`));
         if (f.file) console.log(pc.dim(`  File: ${f.file}`));
@@ -81,9 +94,8 @@ export async function auditCommand(options: { config?: string }) {
 
     console.log('\n');
     
-    // Fail CI builds if there are critical issues
-    if (missingVariables.length > 0 || securityCriticals > 0) {
-      console.error(pc.red(`✗ Audit failed: Found ${missingVariables.length} missing variables and ${securityCriticals} critical security issues.`));
+    if (data.missingVariables.length > 0 || data.securityCriticals > 0) {
+      console.error(pc.red(`✗ Audit failed: Found ${data.missingVariables.length} missing variables and ${data.securityCriticals} critical security issues.`));
       process.exit(1);
     }
 

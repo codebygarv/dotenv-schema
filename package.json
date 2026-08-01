@@ -24,6 +24,7 @@
   },
   "scripts": {
     "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false",
+    "build:action": "esbuild src/action/index.ts --bundle --platform=node --target=node20 --outfile=dist/action/index.js",
     "test": "vitest run"
   },
   "keywords": [
@@ -36,11 +37,15 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@vercel/ncc": "^0.44.1",
+    "esbuild": "^0.28.1",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
     "cac": "^7.0.0",
     "dotenv": "^17.4.2",
     "jiti": "^2.7.0",

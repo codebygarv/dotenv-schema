@@ -1,0 +1,15 @@
+name: 'Env Sentinel Audit'
+description: 'Audits your environment files and schema for missing variables and security leaks.'
+branding:
+  icon: 'shield'
+  color: 'blue'
+inputs:
+  config-file:
+    description: 'Path to env-sentinel config file'
+    required: false
+  github-token:
+    description: 'GitHub Token for posting PR comments'
+    required: true
+runs:
+  using: 'node20'
+  main: 'dist/action/index.js'

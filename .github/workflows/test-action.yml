@@ -1,0 +1,24 @@
+name: Test Action
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - run: npm install
+      - run: npm run build:action
+      
+      # We test the local action. We don't provide a token here to prevent 
+      # posting actual comments during our CI tests, but it will print to the summary.
+      - name: Run Env Sentinel Action
+        uses: ./
+        with:
+          github-token: ''
