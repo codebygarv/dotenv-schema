@@ -1,12 +1,26 @@
 {
-  "name": "env",
+  "name": "dotenv-schema",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Validate, secure, document, audit, and manage environment variables with confidence.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run"
   },
-  "keywords": [],
+  "keywords": [
+    "dotenv",
+    "environment",
+    "schema",
+    "validation"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
 }
