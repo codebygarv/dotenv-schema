@@ -1,5 +1,5 @@
 {
-  "name": "dotenv-schema",
+  "name": "env-protector",
   "version": "1.0.0",
   "description": "Validate, secure, document, audit, and manage environment variables with confidence.",
   "type": "module",
