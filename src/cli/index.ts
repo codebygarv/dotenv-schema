@@ -3,6 +3,7 @@ import { cac } from 'cac';
 import { validateCommand } from './commands/validate.js';
 import { checkCommand } from './commands/check.js';
 import { auditCommand } from './commands/audit.js';
+import { generateCommand } from './commands/generate.js';
 import fs from 'fs';
 import { resolve } from 'path';
 
@@ -31,6 +32,12 @@ cli
   .command('audit', 'Scan environment files and source code for issues')
   .option('-c, --config <file>', 'Path to config file')
   .action(auditCommand);
+
+cli
+  .command('generate', 'Generate environment variable documentation')
+  .option('-c, --config <file>', 'Path to config file')
+  .option('-f, --format <format>', 'Output format (markdown or example)', { default: 'markdown' })
+  .action(generateCommand);
 
 cli.help();
 cli.version(version);

@@ -1,8 +1,19 @@
 import { EnvSchema, InferEnv } from '../types/schema.js';
 import { validateValue } from '../validators/validators.js';
 
+export const SCHEMA_SYMBOL = Symbol.for('env-sentinel-schema');
+
 export function defineEnv<T extends EnvSchema>(schema: T, processEnv: NodeJS.ProcessEnv = process.env): InferEnv<T> {
   const result: Record<string, any> = {};
+  
+  if (process.env.ENV_SENTINEL_SKIP_VALIDATION === 'true') {
+    Object.defineProperty(result, SCHEMA_SYMBOL, {
+      value: schema,
+      enumerable: false,
+    });
+    return result as InferEnv<T>;
+  }
+
   const errors: string[] = [];
 
   for (const [key, schemaOption] of Object.entries(schema)) {
@@ -32,6 +43,12 @@ export function defineEnv<T extends EnvSchema>(schema: T, processEnv: NodeJS.Pro
       throw new Error('Environment validation failed');
     }
   }
+
+  // Attach schema to the result even if validated (useful for runtime introspection)
+  Object.defineProperty(result, SCHEMA_SYMBOL, {
+    value: schema,
+    enumerable: false,
+  });
 
   return result as InferEnv<T>;
 }
