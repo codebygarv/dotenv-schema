@@ -80,6 +80,12 @@ export async function auditCommand(options: { config?: string }) {
     }
 
     console.log('\n');
+    
+    // Fail CI builds if there are critical issues
+    if (missingVariables.length > 0 || securityCriticals > 0) {
+      console.error(pc.red(`✗ Audit failed: Found ${missingVariables.length} missing variables and ${securityCriticals} critical security issues.`));
+      process.exit(1);
+    }
 
   } catch (err: any) {
     console.error(pc.red(`\nError: ${err.message}\n`));

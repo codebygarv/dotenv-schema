@@ -5,11 +5,25 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./next": {
+      "import": "./dist/adapters/next.js",
+      "require": "./dist/adapters/next.cjs"
+    },
+    "./vite": {
+      "import": "./dist/adapters/vite.js",
+      "require": "./dist/adapters/vite.cjs"
+    }
+  },
   "bin": {
     "env-sentinel": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "build": "tsup && tsc --emitDeclarationOnly --declaration --declarationMap false",
     "test": "vitest run"
   },
   "keywords": [
